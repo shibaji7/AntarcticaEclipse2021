@@ -1,5 +1,6 @@
 import cartopy
 import cartopy.crs as ccrs
+from cartopy.feature.nightshade import Nightshade
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -91,18 +92,21 @@ def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims
         ax.text(lo_n, la_n, times[_k].strftime("%H:%M"), ha="left", va="center",
                 fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
     ax.plot([lon_n[-1], lon_s[-1]], [lat_n[-1], lat_s[-1]], color="r", linewidth=1, ls="-.", transform=orthographic)
+    date = f.Time.tolist()[0]
+    ax.add_feature(Nightshade(date, alpha=0.2))
+    ax.text(1.01, 0.5, date.strftime("%H:%M:%S UT"), ha="left", va="center", transform=ax.transAxes, rotation=90)
     ax.text(lon_n[-1], lat_n[-1], times[-1].strftime("%H:%M"), ha="left", va="center", 
             fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
-    ax.text(-0.01, 0.8, "Geographic Coordinate", ha="right", va="center", transform=ax.transAxes, rotation=90)
+    ax.text(-0.01, 0.5, "Geographic Coordinate", ha="right", va="center", transform=ax.transAxes, rotation=90)
     fig.savefig(pngfname)
     return
 
 def create_dec4_eclipse():
     fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir", "hal", "san", "sys", "sps", "dce"],\
                             "4 December, 2021", False, "images/Dec4Eclipse_South.png"
-    create_eclipse_path(fname, center, rads, title, north, pngfname)
-    center, rads, north, pngfname = (-95, 60), ["bks", "gbr", "kap"], True, "images/Dec4Eclipse_North.png"
-    create_eclipse_path(fname, center, rads, title, north, pngfname)
+    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -20])
+    #center, rads, north, pngfname = (-95, 60), ["bks", "gbr", "kap"], True, "images/Dec4Eclipse_North.png"
+    #create_eclipse_path(fname, center, rads, title, north, pngfname)
     return
 
 def create_june10_eclipse():
@@ -127,7 +131,7 @@ def plot_fov(center=[-95, 90], rads=["wal", "bks", "fhe", "fhw", "cve", "cvw", ]
     return
 
 if __name__ == "__main__":
-    #create_dec4_eclipse()
+    create_dec4_eclipse()
     #create_june10_eclipse()
-    plot_fov()
+    #plot_fov()
     pass
