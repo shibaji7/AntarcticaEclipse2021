@@ -104,7 +104,7 @@ def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims
 def create_dec4_eclipse():
     fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir", "hal", "san", "sys", "sps", "dce"],\
                             "4 December, 2021", False, "images/Dec4Eclipse_South.png"
-    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -20])
+    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -50])
     #center, rads, north, pngfname = (-95, 60), ["bks", "gbr", "kap"], True, "images/Dec4Eclipse_North.png"
     #create_eclipse_path(fname, center, rads, title, north, pngfname)
     return
