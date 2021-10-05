@@ -3,10 +3,14 @@ import cartopy.crs as ccrs
 from cartopy.feature.nightshade import Nightshade
 import matplotlib.pyplot as plt
 import pandas as pd
+from shapely.geometry import Polygon
+from descartes.patch import PolygonPatch
 
 import numpy as np
 import pydarn
 import rad_fov
+
+import os
 
 def overlay_radar(rads, ax, _to, _from, color="k", zorder=2, marker="o", ms=2, font={"size":8, "color":"b", "weight":"bold"}, north=True):
     times = -1 if north else 1    
@@ -52,7 +56,7 @@ def overlay_fov(rads, ax, _to, _from, maxGate=75, rangeLimits=None, beamLimits=N
     return
 
 def create_cartopy(prj):
-    fig = plt.figure(dpi=120, figsize=(6,6))
+    fig = plt.figure(dpi=140, figsize=(4,4))
     ax = fig.add_subplot(111, projection=prj)
     ax.add_feature(cartopy.feature.OCEAN, zorder=0, alpha=0.1)
     ax.add_feature(cartopy.feature.LAND, zorder=0, edgecolor="black", alpha=0.2, lw=0.3)
@@ -130,8 +134,109 @@ def plot_fov(center=[-95, 90], rads=["wal", "bks", "fhe", "fhw", "cve", "cvw", ]
     fig.savefig(pngfname)
     return
 
+def plot_run_mode1():
+    os.system("rm -rf images/*mode1_*.png")
+    fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir"],\
+                            "4 December, 2021", False, "images/Dec4Eclipse_South_mode1_%02d.png"
+    extend_lims, lsep = [-90, -50], 10.
+    f = pd.read_csv(fname, parse_dates=["Time"])
+    geodetic = ccrs.Geodetic()
+    orthographic = ccrs.Orthographic(center[0], center[1])
+    
+    times = f.Time.tolist()
+    beams = [16, 13, 9, 5, 1] * 3
+    colors = (["cyan"] * 5) + (["red"] * 5) + (["blue"] * 5)
+    for bm, cl, i in zip(beams, colors, range(len(colors))):
+        fig, ax = create_cartopy(orthographic)
+        lat, lon = convert_to_map_lat_lon(f.Center_Longitude, f.Center_Latitude, geodetic, orthographic)
+        ax.plot(lon, lat, color="k", linewidth=1, ls="--", transform=orthographic)
+        lat_n, lon_n = convert_to_map_lat_lon(f.South_Longitude, f.South_Latitude, geodetic, orthographic)
+        ax.plot(lon_n, lat_n, color="b", linewidth=1, ls="-", transform=orthographic)
+        lat_s, lon_s = convert_to_map_lat_lon(f.North_Longitude, f.North_Latitude, geodetic, orthographic)
+        ax.plot(lon_s, lat_s, color="b", linewidth=1, ls="-", transform=orthographic)
+        
+        overlay_fov(rads, ax, orthographic, geodetic, beamLimits=[bm, bm-1], fovColor=cl)
+        overlay_fov(rads, ax, orthographic, geodetic,)
+        overlay_radar(rads, ax, orthographic, geodetic, north=north)
+        ax.text(0.01, 1.05, title, ha="left", va="top", transform=ax.transAxes)
+        ax.set_extent((-180, 180, extend_lims[0],extend_lims[1]), crs = ccrs.PlateCarree())
+        for _k in range(int(len(lat_s)/lsep)):
+            _k = int(lsep*_k)
+            la_n, lo_n, la_s, lo_s = lat_n[_k], lon_n[_k], lat_s[_k], lon_s[_k]
+            ax.plot([lo_n, lo_s], [la_n, la_s], color="r", linewidth=1, ls="--", transform=orthographic)
+            x, y = orthographic.transform_point(lo_n, la_n, geodetic)
+            ax.text(lo_n, la_n, times[_k].strftime("%H:%M"), ha="left", va="center",
+                    fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
+        ax.plot([lon_n[-1], lon_s[-1]], [lat_n[-1], lat_s[-1]], color="r", linewidth=1, ls="-.", transform=orthographic)
+        date = f.Time.tolist()[0]
+        ax.add_feature(Nightshade(date, alpha=0.2))
+        ax.text(1.01, 0.99, "Scan Time: %02d s"%(i*4), ha="left", va="top", transform=ax.transAxes, rotation=90)
+        ax.text(lon_n[-1], lat_n[-1], times[-1].strftime("%H:%M"), ha="left", va="center", 
+                fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
+        ax.text(-0.01, 0.5, "Geographic Coordinate", ha="right", va="center", transform=ax.transAxes, rotation=90)
+        ax.text(0.99, 1.05, r"$B_{%02d}, f_{%d}$"%(bm-1, i/5), ha="right", va="top", transform=ax.transAxes)
+        fig.savefig(pngfname%i)
+        plt.close()
+    code = "ffmpeg -r 1 -i %s -c:v libx264 -vf 'scale=1420:-2,fps=3,format=yuv420p' %s"%(pngfname, "images/Dec4Eclipse_South_mode1.mp4")
+    os.system(code)
+    os.system("rm -rf images/*mode1_*.png")
+    return
+
+def plot_run_mode2():
+    os.system("rm -rf images/*mode2_*.png")
+    fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir"],\
+                            "4 December, 2021", False, "images/Dec4Eclipse_South_mode2_%02d.png"
+    extend_lims, lsep = [-90, -50], 10.
+    f = pd.read_csv(fname, parse_dates=["Time"])
+    geodetic = ccrs.Geodetic()
+    orthographic = ccrs.Orthographic(center[0], center[1])
+    
+    times = f.Time.tolist()
+    beams = [16, 13, 9, 5, 1] * 3
+    colors = ["cyan", "red", "blue"]
+    i = 0
+    for bcl, cl in enumerate(colors):
+        for bm in beams:
+            fig, ax = create_cartopy(orthographic)
+            lat, lon = convert_to_map_lat_lon(f.Center_Longitude, f.Center_Latitude, geodetic, orthographic)
+            ax.plot(lon, lat, color="k", linewidth=1, ls="--", transform=orthographic)
+            lat_n, lon_n = convert_to_map_lat_lon(f.South_Longitude, f.South_Latitude, geodetic, orthographic)
+            ax.plot(lon_n, lat_n, color="b", linewidth=1, ls="-", transform=orthographic)
+            lat_s, lon_s = convert_to_map_lat_lon(f.North_Longitude, f.North_Latitude, geodetic, orthographic)
+            ax.plot(lon_s, lat_s, color="b", linewidth=1, ls="-", transform=orthographic)
+
+            overlay_fov(rads, ax, orthographic, geodetic, beamLimits=[bm, bm-1], fovColor=cl)
+            overlay_fov(rads, ax, orthographic, geodetic,)
+            overlay_radar(rads, ax, orthographic, geodetic, north=north)
+            ax.text(0.01, 1.05, title, ha="left", va="top", transform=ax.transAxes)
+            ax.set_extent((-180, 180, extend_lims[0],extend_lims[1]), crs = ccrs.PlateCarree())
+            for _k in range(int(len(lat_s)/lsep)):
+                _k = int(lsep*_k)
+                la_n, lo_n, la_s, lo_s = lat_n[_k], lon_n[_k], lat_s[_k], lon_s[_k]
+                ax.plot([lo_n, lo_s], [la_n, la_s], color="r", linewidth=1, ls="--", transform=orthographic)
+                x, y = orthographic.transform_point(lo_n, la_n, geodetic)
+                ax.text(lo_n, la_n, times[_k].strftime("%H:%M"), ha="left", va="center",
+                        fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
+            ax.plot([lon_n[-1], lon_s[-1]], [lat_n[-1], lat_s[-1]], color="r", linewidth=1, ls="-.", transform=orthographic)
+            date = f.Time.tolist()[0]
+            ax.add_feature(Nightshade(date, alpha=0.2))
+            ax.text(1.01, 0.99, "Scan Time: %02d s"%(i*4), ha="left", va="top", transform=ax.transAxes, rotation=90)
+            ax.text(lon_n[-1], lat_n[-1], times[-1].strftime("%H:%M"), ha="left", va="center", 
+                    fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
+            ax.text(-0.01, 0.5, "Geographic Coordinate", ha="right", va="center", transform=ax.transAxes, rotation=90)
+            ax.text(0.99, 1.05, r"$B_{%02d}, f_{%d}$"%(bm-1, bcl), ha="right", va="top", transform=ax.transAxes)
+            fig.savefig(pngfname%i)
+            plt.close()
+            i += 1
+    code = "ffmpeg -r 1 -i %s -c:v libx264 -vf 'scale=1420:-2,fps=3,format=yuv420p' %s"%(pngfname, "images/Dec4Eclipse_South_mode2.mp4")
+    os.system(code)
+    os.system("rm -rf images/*mode2_*.png")
+    return
+
 if __name__ == "__main__":
-    create_dec4_eclipse()
+    #plot_run_mode1()
+    plot_run_mode2()
+    #create_dec4_eclipse()
     #create_june10_eclipse()
     #plot_fov()
     pass
