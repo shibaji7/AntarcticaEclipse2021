@@ -6,11 +6,32 @@ import pandas as pd
 from shapely.geometry import Polygon
 from descartes.patch import PolygonPatch
 
+import datetime as dt
 import numpy as np
 import pydarn
 import rad_fov
 
 import os
+
+import h5py
+from scipy import interpolate
+
+def read_obscuration_data(dates, h=350, filename="data/obscuration_km_to_m_south_dec_2021.zip"):
+    fname = filename.replace(".zip", ".h5")
+    os.system("unzip %s -d %s"%(filename, "data/"))
+    data = {}
+    with h5py.File(fname, "r") as f:
+        keys = list(f.keys())
+        for k in keys:
+            data[k] = f[k][:]
+    data["date"] = [dt.datetime(y,m,d,h,mi) for y, m, d, h, mi in zip(data["year"], data["month"], data["day"], 
+                                                                      data["hour"], data["minute"])]
+    os.system("rm -rf " + fname)
+    idx = np.array([data["date"].index(d) for d in dates])
+    lat, lon = np.array(data["lats"]), np.array(data["lons"])
+    obs = data["obs%d"%h][::2,:,idx]
+    obs[obs<=1.] = np.nan
+    return lat, lon[::2], obs
 
 def overlay_radar(rads, ax, _to, _from, color="k", zorder=2, marker="o", ms=2, font={"size":8, "color":"b", "weight":"bold"}, north=True):
     times = -1 if north else 1    
@@ -72,7 +93,7 @@ def convert_to_map_lat_lon(xs, ys, _from, _to):
         lon.append(_lon)
     return lat, lon
 
-def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[50, 90], lsep=10.):
+def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[50, 90], lsep=10., date=None):
     f = pd.read_csv(fname, parse_dates=["Time"])
     geodetic = ccrs.Geodetic()
     orthographic = ccrs.Orthographic(center[0], center[1])
@@ -92,12 +113,15 @@ def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims
         _k = int(lsep*_k)
         la_n, lo_n, la_s, lo_s = lat_n[_k], lon_n[_k], lat_s[_k], lon_s[_k]
         ax.plot([lo_n, lo_s], [la_n, la_s], color="r", linewidth=1, ls="--", transform=orthographic)
-        x, y = orthographic.transform_point(lo_n, la_n, geodetic)
         ax.text(lo_n, la_n, times[_k].strftime("%H:%M"), ha="left", va="center",
                 fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
     ax.plot([lon_n[-1], lon_s[-1]], [lat_n[-1], lat_s[-1]], color="r", linewidth=1, ls="-.", transform=orthographic)
-    date = f.Time.tolist()[0]
+    date = f.Time.tolist()[0] if date is None else date
     ax.add_feature(Nightshade(date, alpha=0.2))
+    lats, lons, obs = read_obscuration_data([date])
+    lons, lats = np.meshgrid(lons, lats)
+    XYZ = orthographic.transform_points(geodetic, lons, lats)
+    ax.contourf(XYZ[:,:,0], XYZ[:,:,1], obs[:,:,0].T, cmap="Greens", transform=orthographic, alpha=0.8)
     ax.text(1.01, 0.5, date.strftime("%H:%M:%S UT"), ha="left", va="center", transform=ax.transAxes, rotation=90)
     ax.text(lon_n[-1], lat_n[-1], times[-1].strftime("%H:%M"), ha="left", va="center", 
             fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
@@ -106,9 +130,9 @@ def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims
     return
 
 def create_dec4_eclipse():
-    fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir", "hal", "san", "sys", "sps", "dce"],\
+    fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir", "dce", "sps", "sys"],\
                             "4 December, 2021", False, "images/Dec4Eclipse_South.png"
-    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -50])
+    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -20], date=dt.datetime(2021,12,4,7,45))
     #center, rads, north, pngfname = (-95, 60), ["bks", "gbr", "kap"], True, "images/Dec4Eclipse_North.png"
     #create_eclipse_path(fname, center, rads, title, north, pngfname)
     return
@@ -144,8 +168,8 @@ def plot_run_mode1():
     orthographic = ccrs.Orthographic(center[0], center[1])
     
     times = f.Time.tolist()
-    beams = [16, 13, 9, 5, 1] * 3
-    colors = (["cyan"] * 5) + (["red"] * 5) + (["blue"] * 5)
+    beams = [16, 13, 9, 5, 1] * 4
+    colors = (["cyan"] * 5) + (["red"] * 5) + (["blue"] * 5) + (["orange"] * 5)
     for bm, cl, i in zip(beams, colors, range(len(colors))):
         fig, ax = create_cartopy(orthographic)
         lat, lon = convert_to_map_lat_lon(f.Center_Longitude, f.Center_Latitude, geodetic, orthographic)
@@ -170,7 +194,7 @@ def plot_run_mode1():
         ax.plot([lon_n[-1], lon_s[-1]], [lat_n[-1], lat_s[-1]], color="r", linewidth=1, ls="-.", transform=orthographic)
         date = f.Time.tolist()[0]
         ax.add_feature(Nightshade(date, alpha=0.2))
-        ax.text(1.01, 0.99, "Scan Time: %02d s"%(i*4), ha="left", va="top", transform=ax.transAxes, rotation=90)
+        ax.text(1.01, 0.99, "Scan Time: %02d s"%(i*3), ha="left", va="top", transform=ax.transAxes, rotation=90)
         ax.text(lon_n[-1], lat_n[-1], times[-1].strftime("%H:%M"), ha="left", va="center", 
                 fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
         ax.text(-0.01, 0.5, "Geographic Coordinate", ha="right", va="center", transform=ax.transAxes, rotation=90)
@@ -234,8 +258,9 @@ def plot_run_mode2():
     return
 
 if __name__ == "__main__":
+    #read_obscuration_data([dt.datetime(2021,12,4,7)])
     #plot_run_mode1()
-    plot_run_mode2()
+    #plot_run_mode2()
     #create_dec4_eclipse()
     #create_june10_eclipse()
     #plot_fov()
