@@ -93,7 +93,7 @@ def convert_to_map_lat_lon(xs, ys, _from, _to):
         lon.append(_lon)
     return lat, lon
 
-def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[50, 90], lsep=10., date=None):
+def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[60, 90], lsep=10., date=None):
     f = pd.read_csv(fname, parse_dates=["Time"])
     geodetic = ccrs.Geodetic()
     orthographic = ccrs.Orthographic(center[0], center[1])
@@ -121,7 +121,7 @@ def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims
     lats, lons, obs = read_obscuration_data([date])
     lons, lats = np.meshgrid(lons, lats)
     XYZ = orthographic.transform_points(geodetic, lons, lats)
-    ax.contourf(XYZ[:,:,0], XYZ[:,:,1], obs[:,:,0].T, cmap="Greens", transform=orthographic, alpha=0.8)
+    #ax.contourf(XYZ[:,:,0], XYZ[:,:,1], obs[:,:,0].T, cmap="Greens", transform=orthographic, alpha=0.8)
     ax.text(1.01, 0.5, date.strftime("%H:%M:%S UT"), ha="left", va="center", transform=ax.transAxes, rotation=90)
     ax.text(lon_n[-1], lat_n[-1], times[-1].strftime("%H:%M"), ha="left", va="center", 
             fontdict={"size":7, "color":"r", "weight":"bold"}, transform=orthographic)
@@ -132,7 +132,7 @@ def create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims
 def create_dec4_eclipse():
     fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir", "dce", "sps", "sys"],\
                             "4 December, 2021", False, "images/Dec4Eclipse_South.png"
-    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -20], date=dt.datetime(2021,12,4,7,45))
+    create_eclipse_path(fname, center, rads, title, north, pngfname, extend_lims=[-90, -50], date=dt.datetime(2021,12,4,7,45))
     #center, rads, north, pngfname = (-95, 60), ["bks", "gbr", "kap"], True, "images/Dec4Eclipse_North.png"
     #create_eclipse_path(fname, center, rads, title, north, pngfname)
     return
@@ -160,12 +160,12 @@ def plot_fov(center=[-95, 90], rads=["wal", "bks", "fhe", "fhw", "cve", "cvw", ]
 
 def plot_run_mode1():
     os.system("rm -rf images/*mode1_*.png")
-    fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-95, -90), ["fir"],\
+    fname, center, rads, title, north, pngfname = "data/Dec4Eclipse.csv", (-180, -90), ["fir"],\
                             "4 December, 2021", False, "images/Dec4Eclipse_South_mode1_%02d.png"
     extend_lims, lsep = [-90, -50], 10.
     f = pd.read_csv(fname, parse_dates=["Time"])
     geodetic = ccrs.Geodetic()
-    orthographic = ccrs.Orthographic(center[0], center[1])
+    orthographic = ccrs.SouthPolarStereo(0)#Orthographic(center[0], center[1])
     
     times = f.Time.tolist()
     beams = [16, 13, 9, 5, 1] * 4
@@ -259,7 +259,7 @@ def plot_run_mode2():
 
 if __name__ == "__main__":
     #read_obscuration_data([dt.datetime(2021,12,4,7)])
-    #plot_run_mode1()
+    plot_run_mode1()
     #plot_run_mode2()
     #create_dec4_eclipse()
     #create_june10_eclipse()
